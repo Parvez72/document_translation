@@ -12,11 +12,7 @@ var request = require('request')
 
 
 
-var formData = {
 
-    file: fs.createReadStream('./businesscard.pdf'),
-
-};
 
 var client = new Client();
 
@@ -35,13 +31,21 @@ let createPdf = (htmldata)=>{
     return new Promise(resolve => {
         pdf.create(htmldata, {format:'Letter'}).toFile('./businesscard.pdf', function(err, res) {
             if (err) return console.log(err);
-            console.log(res); // { filename: '/app/businesscard.pdf' }
-            request.post({url:'https://chat.botplatform.io/upload-file', formData: formData}, function optionalCallback(err, httpResponse, body) {
+            var formData = {
+
+                file: fs.createReadStream('./businesscard.pdf'),
+
+            };
+            //console.log(formData,'pdf File name'); // { filename: '/app/businesscard.pdf' }
+            request.post({url:'https://chat.botplatform.io/upload-file?json=true', formData: formData}, function optionalCallback(err, httpResponse, body) {
                 if (err) {
                     return console.error('upload failed:', err);
                 }
-                console.log(body);
-                resolve(body.split('"')[5])
+                else{
+                    console.log(body,"body");
+                    resolve(JSON.parse(body).url)
+                }
+
             });
 
         })
@@ -60,7 +64,7 @@ let convert = function(){
                     headers: { "Content-Type": "application/json" }
                 }
                 client.post('http://127.0.0.1:5000/jsontoarray/',args,function (data, res) {
-                    console.log(data)
+                    console.log(data,"converted data")
                     createPdf(json2html(data)).then((result)=>{
                         console.log(result)
                         resolve(result)
@@ -91,21 +95,16 @@ router.get('/getDoc',function (req, res, next) {
 
 })
 router.post('/translateDoc/',function (req, res, next) {
-    console.log(req.query)
+    console.log(req.query,"incoming query")
     let url = req.query.url
 
     download(url, options, function(err){
-        return new Promise(resolve => {
-            if (err) throw err
-            console.log("done downloading file")
-            resolve()
-        }).then(()=>{
             convert().then((result)=>{
-                console.log(result)
+                console.log(result,"result from convert")
                 res.send(result)
             })
         })
-    })
+
 
 })
 
