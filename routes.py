@@ -1,11 +1,15 @@
 from flask import Flask, request
 from flask_restful import Api, Resource, reqparse
 import json
-from google.cloud import translate
+import requests
+import json
+from collections import defaultdict
 
-apiKey = 'AIzaSyDOnd3s6gMOHyUwesZMaHdq92LkgexGslI'
 
-translate_client = translate.Client()
+counter = 0
+index = 0
+filePath = '/home/parvez/Documents/newConverted.json'
+apiKey = 'my_api_key'
 
 
 target = 'de'
@@ -38,12 +42,57 @@ def arraytojson(arry, jsonFile):
     return jsonFile
 
 def translateDocument(doc):
-    result = translate_client.translate(doc,target_language=target, source_language='en')
-    print(result)
+    params ={'key':apiKey,'q':doc,'soure':'en','target':target}
+    response = requests.post('https://www.googleapis.com/language/translate/v2',params=params)
+    result = json.loads(response.content)['data']['translations']
+    #print(result)
     payload = []
     for i in result:
         payload.append(str(i['translatedText']))
     return payload
+
+
+def getSubject(data):
+    counter = 0
+    index = 0
+    pdfFile = defaultdict(list)
+    for i in data['result']:
+        for j in i['segments']:
+            # print(j)
+            # print(index)
+            # print(counter)
+            if(j.get('page_number')==counter):
+                if(j.get('heading')):
+                    pdfFile['subject'][index-1]+="  "+j['heading']['content']
+                    if(j.get('content')):
+                        for msg in j['content']:
+                            pdfFile['text'][index-1]+="\n"+msg['content']
+                    else:
+                        pass
+                elif(j.get('content')):
+                    for msg in j['content']:
+                        pdfFile['text'][index-1]+="\n"+msg['content']
+                else:
+                    pass
+            else:
+                pdfFile['pageNumber'].append(j['page_number'])
+                if(j.get('heading')):
+                    pdfFile['subject'].append(j['heading']['content'])
+                    if(j.get('content')):
+                        for msg in j['content']:
+                            pdfFile['text'].append(msg['content'])
+                    else:
+                        pdfFile['text'].append('')
+                elif(j.get('content')):
+                    print('...')
+                    pdfFile['subject'].append('')
+                    for msg in j['content']:
+                        pdfFile['text'].append(msg['content'])
+                else:
+                    pdfFile['text'].append('')
+                counter = j['page_number']
+                index+=1
+    return json.dumps(pdfFile)
 
 class jsontoarray(Resource):
     def post(self):
@@ -71,6 +120,16 @@ class jsontoarray(Resource):
         result = translateDocument(arry)
         tarray = arraytojson(result, jsonData)
         return tarray
+
+    #pdf parser api
+
+    def get(self):
+        with open(filePath) as json_file:
+            json_data = json.load(json_file)
+            #print(json_data['result'])
+            jsonObject = getSubject(json_data)
+            print(jsonObject)
+            return jsonObject
 
 
 api.add_resource(jsontoarray, "/jsontoarray/")
